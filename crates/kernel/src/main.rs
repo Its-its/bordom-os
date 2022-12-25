@@ -10,7 +10,7 @@ use core::panic::PanicInfo;
 
 use bootloader_api::{entry_point, config::Mapping, BootloaderConfig, BootInfo};
 
-use kernel::{println, font::FONT, print, color::ColorName};
+use kernel::{println, font::{FONTS, validate_fonts}, print, color::ColorName};
 
 #[panic_handler]
 fn panic_handler(info: &PanicInfo) -> ! {
@@ -36,7 +36,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     error!("Error Display");
     trace!("Trace display");
 
-    for (i, glyph) in FONT.iter().enumerate() {
+    for (i, glyph) in FONTS.iter().enumerate() {
         if (i + 1) % 10 == 0 {
             println!();
         }
@@ -51,6 +51,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     }
 
     println!("{}", ColorName::Foreground.ansi());
+
+    validate_fonts();
 
     kernel::hlt_loop()
 }

@@ -216,7 +216,7 @@ impl FrameBufferWriter {
     }
 
     fn draw_glyph_in_cell(&mut self, (sx, sy): (u16, u16), char: char) {
-        let glyph = &font::FONT[char as usize];
+        let glyph = &font::FONTS[char as usize];
 
         // (0, 0) is at the bottom left of the glyph,
         // while `glyph.raster` starts at the top left,
