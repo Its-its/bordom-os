@@ -1,0 +1,13 @@
+[package]
+name = "keyboard"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+num_enum = { version = "0.5.7", default-features = false }
+
+spin = "0.9.4"
+
+[dependencies.lazy_static]
+version = "1.4.0"
+features = [ "spin_no_std" ]

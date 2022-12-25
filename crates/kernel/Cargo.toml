@@ -1,0 +1,23 @@
+[package]
+name = "kernel"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = { path = "../common" }
+keyboard = { path = "../keyboard" }
+
+bootloader_api = "0.11.0"
+linked_list_allocator = "0.10.4"
+pic8259 = "0.10.2"
+spin = "0.9.4"
+tracing = { version = "0.1.37", default-features = false, features = ["attributes"] }
+uart_16550 = "0.2.18"
+x2apic = "0.4.1"
+x86_64 = "0.14.10"
+
+[dependencies.lazy_static]
+version = "1.4.0"
+features = [ "spin_no_std" ]
