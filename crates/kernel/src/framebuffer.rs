@@ -1,5 +1,6 @@
 use core::fmt::Write;
 
+use alloc::{collections::VecDeque, vec::Vec};
 use bootloader_api::info::FrameBufferInfo;
 use common::Position;
 use spin::{Mutex, Once};
@@ -32,6 +33,8 @@ pub struct FrameBufferWriter {
     cell: Position<u16>,
     text_style: TextStyle,
     bytes_per_pixel: usize,
+
+    cached_lines: VecDeque<Vec<char>>,
 }
 
 impl FrameBufferWriter {
@@ -41,7 +44,8 @@ impl FrameBufferWriter {
             info,
             cell: Position::default(),
             text_style: TextStyle::default(),
-            bytes_per_pixel: info.bytes_per_pixel
+            bytes_per_pixel: info.bytes_per_pixel,
+            cached_lines: VecDeque::with_capacity(500),
         };
 
         fb.clear();
@@ -50,6 +54,9 @@ impl FrameBufferWriter {
     }
 
     fn clear(&mut self) {
+        self.cached_lines.clear();
+        self.cached_lines.push_back(Vec::new());
+
         let bg = ColorName::Background.color().to_framebuffer_pixel();
 
         // This is faster than using for i in 0..num_subpixels,
@@ -98,6 +105,10 @@ impl FrameBufferWriter {
     }
 
     fn cursor_next_line(&mut self) {
+        if self.cached_lines.len() == 500 {
+            self.cached_lines.pop_front();
+        }
+
         if self.cell.y() + 1 >= self.info.height as u16 / (font::FONT_SCALE * font::FONT_HEIGHT) {
             self.move_buffer_up();
             self.cell.set_x(0);
@@ -105,6 +116,8 @@ impl FrameBufferWriter {
             self.cell.set_x(0);
             self.cell.inc_y(1);
         }
+
+        self.cached_lines.push_back(Vec::new());
     }
 
     // TODO: Check string for new line? Move up first then render. Would fix self.buffer overflow
@@ -117,17 +130,22 @@ impl FrameBufferWriter {
                 continue;
             }
 
+            let last_cached_row = self.cached_lines.back_mut().unwrap();
+
             if char == '\x08' {
                 // TODO: Clear Cell.
 
                 if self.cell.x() != 0 {
                     self.cell.dec_x(1);
+                    last_cached_row.pop();
                 } else {
                     // TODO
                 }
 
                 continue;
             }
+
+            last_cached_row.push(char);
 
             if char == '\x1B' {
                 let _square_bracket = chars.next();

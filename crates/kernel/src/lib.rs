@@ -48,6 +48,17 @@ pub fn init(boot_info: &'static mut BootInfo) {
     let green = color::ColorName::Green.ansi();
     let clear = color::ColorName::Foreground.ansi();
 
+    // Heap
+    print!("INIT: Heap.......... ");
+    let physical_mem_offset = VirtAddr::new(*PHYSICAL_MEM_OFFSET.get().unwrap());
+    let mut mapper = unsafe { memory::init(physical_mem_offset) };
+    let mut frame_allocator = unsafe {
+        BootInfoFrameAllocator::init(&boot_info.memory_regions)
+    };
+    allocator::init_heap(&mut mapper, &mut frame_allocator)
+        .expect("Heap initialization failed");
+    println!("[{green}OK{clear}]");
+
     // Framebuffer Output
     let fb = boot_info.framebuffer.as_mut().unwrap();
     let fb_info = fb.info();
@@ -66,17 +77,6 @@ pub fn init(boot_info: &'static mut BootInfo) {
     // APIC
     print!("INIT: APIC.......... ");
     apic::init();
-    println!("[{green}OK{clear}]");
-
-    // Heap
-    print!("INIT: Heap.......... ");
-    let physical_mem_offset = VirtAddr::new(*PHYSICAL_MEM_OFFSET.get().unwrap());
-    let mut mapper = unsafe { memory::init(physical_mem_offset) };
-    let mut frame_allocator = unsafe {
-        BootInfoFrameAllocator::init(&boot_info.memory_regions)
-    };
-    allocator::init_heap(&mut mapper, &mut frame_allocator)
-        .expect("Heap initialization failed");
     println!("[{green}OK{clear}]");
 
     // Tracing
