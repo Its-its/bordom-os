@@ -10,7 +10,7 @@ use core::panic::PanicInfo;
 
 use bootloader_api::{entry_point, config::Mapping, BootloaderConfig, BootInfo};
 
-use kernel::println;
+use kernel::{println, font::FONT, print, color::ColorName};
 
 #[panic_handler]
 fn panic_handler(info: &PanicInfo) -> ! {
@@ -27,23 +27,30 @@ pub static BOOTLOADER_CONFIG: BootloaderConfig = {
 
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
-// #[instrument]
-// fn test_tracing(a: u64, b: bool) {
-//     info!("Testing tracing!");
-// }
-
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     kernel::init(boot_info);
 
-    debug!("Hello, World!");
-    info!("Hello, Again!");
-    warn!("Hello, Again!");
-    error!("Hello, Again!");
-    trace!("Hello, Again!");
+    debug!("Debug Display");
+    info!("Info Display");
+    warn!("Warn Display");
+    error!("Error Display");
+    trace!("Trace display");
 
-    // test_tracing(42, false);
+    for (i, glyph) in FONT.iter().enumerate() {
+        if (i + 1) % 10 == 0 {
+            println!();
+        }
 
-    debug!("It did not crash!");
+        let color = if i % 2 == 0 {
+            ColorName::Blue.ansi()
+        } else {
+            ColorName::Cyan.ansi()
+        };
+
+        print!("{color}{}  ", glyph.charlie);
+    }
+
+    println!("{}", ColorName::Foreground.ansi());
 
     kernel::hlt_loop()
 }
