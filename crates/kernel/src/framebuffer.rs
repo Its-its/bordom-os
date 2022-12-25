@@ -30,11 +30,13 @@ impl Default for TextStyle {
 pub struct FrameBufferWriter {
     buffer: &'static mut [u8],
     info: FrameBufferInfo,
-    cell: Position<u16>,
     text_style: TextStyle,
     bytes_per_pixel: usize,
 
     cached_lines: VecDeque<Vec<char>>,
+    cell: Position<u16>,
+
+    displaying_cursor: bool,
 }
 
 impl FrameBufferWriter {
@@ -42,15 +44,22 @@ impl FrameBufferWriter {
         let mut fb = FrameBufferWriter {
             buffer,
             info,
-            cell: Position::default(),
             text_style: TextStyle::default(),
             bytes_per_pixel: info.bytes_per_pixel,
+
             cached_lines: VecDeque::with_capacity(500),
+            cell: Position::default(),
+
+            displaying_cursor: false,
         };
 
         fb.clear();
 
         fb
+    }
+
+    pub fn tick(&mut self) {
+        self.displaying_cursor = !self.displaying_cursor;
     }
 
     fn clear(&mut self) {
@@ -148,61 +157,89 @@ impl FrameBufferWriter {
             last_cached_row.push(char);
 
             if char == '\x1B' {
-                let _square_bracket = chars.next();
-                let color_code = [chars.next(), chars.next()];
+                #[allow(clippy::single_match)]
+                match chars.next() {
+                    Some('[') => {
+                        // TODO: Remove alloc?
+                        let mut items = Vec::new();
 
-                if let [Some(mode), Some(color)] = color_code {
-                    if mode != '3' && mode != '4' { continue }
+                        for item in &mut chars {
+                            items.push(item);
 
-                    let color_index = color as u8 - b'0';
-                    let color = ColorName::from_u8(color_index).color();
+                            if ('a'..='z').contains(&item) || ('A'..='Z').contains(&item) {
+                                break;
+                            }
+                        }
 
-                    match mode {
-                        '3' => self.text_style.foreground = color,
-                        '4' => self.text_style.background = color,
+                        let end_letter = items.pop();
 
-                        _ => ()
+                        items.reverse();
+
+                        match end_letter {
+                            // Foreground / Background - \x1B[30m
+                            Some('m') if items.len() == 2 => {
+                                // TODO: Handle 0 - 107 (items.len() 1, 2, and 3)
+                                let mode = items.pop().unwrap();
+                                let color = items.pop().unwrap();
+
+                                if mode != '3' && mode != '4' { continue }
+
+                                let color_index = color as u8 - b'0';
+                                let color = ColorName::from_u8(color_index).color();
+
+                                match mode {
+                                    '3' => self.text_style.foreground = color,
+                                    '4' => self.text_style.background = color,
+
+                                    _ => ()
+                                }
+                            }
+
+                            _ => ()
+                        }
                     }
-                }
 
-                let _m = chars.next();
+                    _ => ()
+                }
 
                 continue;
             }
 
-            let glyph = &font::FONT[char as usize];
-
-            // (0, 0) is at the bottom left of the glyph,
-            // while `glyph.raster` starts at the top left,
-            // so the glyph has to be offset accordingly
-            let cell_offset_y = font::FONT_SCALE * (font::FONT_HEIGHT.max(glyph.height) - glyph.height);
-
-            for y in 0..glyph.height {
-                for x in 0..glyph.width {
-                    let index = y * glyph.width + x;
-                    let fg_pixel = glyph.display[index as usize];
-
-                    let x = x * font::FONT_SCALE;
-                    let y = y * font::FONT_SCALE;
-
-                    let (sx, sy) = self.cell.inner();
-
-                    let cell_x = sx * font::FONT_SCALE * font::FONT_WIDTH;
-                    let cell_y = sy * font::FONT_SCALE * font::FONT_HEIGHT;
-
-                    let draw_x = (cell_x + x) as isize + (font::FONT_SCALE as isize * glyph.off_x);
-                    let draw_y = (cell_y + y + cell_offset_y) as isize - (font::FONT_SCALE as isize * glyph.off_y);
-
-                    let color = if fg_pixel { self.text_style.foreground } else { self.text_style.background };
-
-                    self.draw_scaled_pixel(color, font::FONT_SCALE, (draw_x as u16, draw_y as u16));
-                }
-            }
+            self.draw_glyph_in_cell(self.cell.inner(), char);
 
             if self.cell.x() + 1 >= self.info.width as u16 / (font::FONT_WIDTH * font::FONT_SCALE) {
                 self.cursor_next_line();
             } else {
                 self.cell.inc_x(1);
+            }
+        }
+    }
+
+    fn draw_glyph_in_cell(&mut self, (sx, sy): (u16, u16), char: char) {
+        let glyph = &font::FONT[char as usize];
+
+        // (0, 0) is at the bottom left of the glyph,
+        // while `glyph.raster` starts at the top left,
+        // so the glyph has to be offset accordingly
+        let cell_offset_y = font::FONT_SCALE * (font::FONT_HEIGHT.max(glyph.height) - glyph.height);
+
+        let cell_x = sx * font::FONT_SCALE * font::FONT_WIDTH;
+        let cell_y = sy * font::FONT_SCALE * font::FONT_HEIGHT;
+
+        for y in 0..glyph.height {
+            for x in 0..glyph.width {
+                let index = y * glyph.width + x;
+                let fg_pixel = glyph.display[index as usize];
+
+                let x = x * font::FONT_SCALE;
+                let y = y * font::FONT_SCALE;
+
+                let draw_x = (cell_x + x) as isize + (font::FONT_SCALE as isize * glyph.off_x);
+                let draw_y = (cell_y + y + cell_offset_y) as isize - (font::FONT_SCALE as isize * glyph.off_y);
+
+                let color = if fg_pixel { self.text_style.foreground } else { self.text_style.background };
+
+                self.draw_scaled_pixel(color, font::FONT_SCALE, (draw_x as u16, draw_y as u16));
             }
         }
     }

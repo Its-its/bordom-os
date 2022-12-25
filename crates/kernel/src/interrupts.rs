@@ -35,7 +35,7 @@ mod handlers {
     use keyboard::{KeyEvent, KeyCode, ExtendedKeyCode};
     use x86_64::{structures::idt::{InterruptStackFrame, PageFaultErrorCode}, instructions::port::Port};
 
-    use crate::{println, apic::LAPIC, hlt_loop, print};
+    use crate::{println, apic::LAPIC, hlt_loop, print, framebuffer::FB_WRITER};
 
     pub extern "x86-interrupt" fn breakpoint(stack_frame: InterruptStackFrame) {
         println!("EXCEPTION: BREAKPOINT");
@@ -59,6 +59,11 @@ mod handlers {
             match key.code {
                 KeyCode::Unknown(v) => print!("[{v}]"),
                 KeyCode::Extended(ExtendedKeyCode::Unknown(v)) => print!("[e{v}]"),
+
+                KeyCode::Extended(ExtendedKeyCode::CursorUp) => print!("\x1B[1A"),
+                KeyCode::Extended(ExtendedKeyCode::CursorDown) => print!("\x1B[1B"),
+                KeyCode::Extended(ExtendedKeyCode::CursorRight) => print!("\x1B[1C"),
+                KeyCode::Extended(ExtendedKeyCode::CursorLeft) => print!("\x1B[1D"),
 
                 _ => print!("{}", key.char),
             }

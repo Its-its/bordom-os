@@ -292,9 +292,6 @@ impl KeyCode {
     }
 }
 
-
-
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum ExtendedKeyCode {
@@ -396,5 +393,18 @@ impl ExtendedKeyCode {
 
             _ => Unknown(value)
         }
+    }
+
+    pub fn to_byte_unicode(self) -> Option<u8> {
+        Some(match self {
+            ExtendedKeyCode::Unknown(_) => 0,
+
+            ExtendedKeyCode::CursorUp => 0,
+            ExtendedKeyCode::CursorLeft => 0,
+            ExtendedKeyCode::CursorRight => 0,
+            ExtendedKeyCode::CursorDown => 0,
+
+            _ => return None,
+        })
     }
 }
