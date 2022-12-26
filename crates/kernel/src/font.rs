@@ -18,8 +18,6 @@ impl FontGlyph {
         (off_x, off_y): (isize, isize),
         display: &'static [bool]
     ) -> Self {
-        // TODO: assert_eq!((width * height) as usize, display.len(), "Glyph ({char_literal}) display array blocks are not equal to its' W*H");
-
         Self {
             charlie,
             width,

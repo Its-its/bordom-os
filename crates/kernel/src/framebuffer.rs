@@ -50,7 +50,7 @@ pub struct FrameBufferWriter {
     displaying_cursor: bool,
 
     input_height: u16,
-    input: Vec<char>,
+    user_input: Vec<char>,
     is_printing: bool,
 }
 
@@ -68,7 +68,7 @@ impl FrameBufferWriter {
             displaying_cursor: false,
 
             input_height: 1,
-            input: Vec::new(),
+            user_input: Vec::new(),
             is_printing: true,
         };
 
@@ -165,10 +165,10 @@ impl FrameBufferWriter {
 
         while let Some(char) = chars.next() {
             // Check to see if we're outputting to console or user input
-            if char == '\x01' {
+            if char == OUTPUT_CODE {
                 self.is_printing = true;
                 continue;
-            } else if char == '\x02' {
+            } else if char == USER_INPUT_CODE {
                 self.is_printing = false;
                 continue;
             }
@@ -177,8 +177,6 @@ impl FrameBufferWriter {
                 if self.is_printing {
                     self.process_buffer_check();
                 } else {
-                    self.is_printing = true;
-
                     {
                         let mut pos = self.cursor_pos;
 
@@ -188,9 +186,11 @@ impl FrameBufferWriter {
                         }
                     }
 
+                    self.is_printing = true;
+
                     self.cursor_pos.set_x(0);
 
-                    let input = core::mem::take(&mut self.input);
+                    let input = core::mem::take(&mut self.user_input);
                     self.write_fmt(format_args!("{}\n", input.into_iter().collect::<String>())).unwrap();
 
                     self.is_printing = false;
@@ -211,7 +211,7 @@ impl FrameBufferWriter {
                     if self.is_printing {
                         last_cached_row.pop();
                     } else {
-                        self.input.pop();
+                        self.user_input.pop();
                     }
                 } else {
                     // TODO
@@ -312,7 +312,7 @@ impl FrameBufferWriter {
 
                 self.draw_glyph_in_cell((last_line_size as u16, buff_len as u16), char);
             } else {
-                self.input.push(char);
+                self.user_input.push(char);
 
                 self.clear_cell(self.cursor_pos.inner());
                 self.draw_glyph_in_cell(self.cursor_pos.inner(), char);
@@ -324,7 +324,6 @@ impl FrameBufferWriter {
                     self.cursor_pos.inc_x(1);
                 }
             }
-
         }
     }
 
@@ -432,9 +431,12 @@ pub fn _print(args: core::fmt::Arguments) {
     })
 }
 
+pub const OUTPUT_CODE: char = '\x7E';
+pub const USER_INPUT_CODE: char = '\x7F';
+
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ($crate::framebuffer::_print(format_args!("\x01{}", format_args!($($arg)*))));
+    ($($arg:tt)*) => ($crate::framebuffer::_print(format_args!("{}{}", $crate::framebuffer::OUTPUT_CODE, format_args!($($arg)*))));
 }
 
 #[macro_export]
@@ -445,5 +447,5 @@ macro_rules! println {
 
 #[macro_export]
 macro_rules! input {
-    ($($arg:tt)*) => ($crate::framebuffer::_print(format_args!("\x02{}", format_args!($($arg)*))));
+    ($($arg:tt)*) => ($crate::framebuffer::_print(format_args!("{}{}", $crate::framebuffer::USER_INPUT_CODE, format_args!($($arg)*))));
 }
