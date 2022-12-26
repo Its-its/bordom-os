@@ -148,7 +148,7 @@ impl FrameBufferWriter {
             self.cached_lines.pop_front();
         }
 
-        if self.cached_lines.len() as u16 + 1 + self.input_height >= self.screen_pixel_height() {
+        if self.cached_lines.len() as u16 + self.input_height >= self.screen_pixel_height() {
             self.move_buffer_up();
         //     self.cursor_pos.set_x(0);
         // } else {
@@ -308,7 +308,7 @@ impl FrameBufferWriter {
                 last_cached_row.push(CacheType::Char(char));
 
                 let last_line_size = last_cached_row.iter().filter(|c| c.is_char()).count().saturating_sub(1);
-                let buff_len = self.cached_lines.len() - 1;
+                let buff_len = (self.cached_lines.len() - 1).min(self.screen_pixel_height() as usize - 1);
 
                 self.draw_glyph_in_cell((last_line_size as u16, buff_len as u16), char);
             } else {
