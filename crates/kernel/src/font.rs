@@ -745,7 +745,7 @@ pub const FONTS: &[FontGlyph] = &[
         ]
     ),
     FontGlyph::new(
-        '<', (4, 7), (2, 6),
+        '<', (4, 7), (2, 3),
         &[
             false, false, false, true,
             false, false, true, false,
@@ -765,7 +765,7 @@ pub const FONTS: &[FontGlyph] = &[
         ]
     ),
     FontGlyph::new(
-        '>', (4, 7), (1, 6),
+        '>', (4, 7), (1, 3),
         &[
             true, false, false, false,
             false, true, false, false,
