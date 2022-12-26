@@ -35,7 +35,7 @@ mod handlers {
     use keyboard::{KeyEvent, KeyCode, ExtendedKeyCode};
     use x86_64::{structures::idt::{InterruptStackFrame, PageFaultErrorCode}, instructions::port::Port};
 
-    use crate::{println, apic::LAPIC, hlt_loop, print, framebuffer::FB_WRITER};
+    use crate::{println, apic::LAPIC, hlt_loop, framebuffer::FB_WRITER, input};
 
     pub extern "x86-interrupt" fn breakpoint(stack_frame: InterruptStackFrame) {
         println!("EXCEPTION: BREAKPOINT");
@@ -44,6 +44,11 @@ mod handlers {
 
     pub extern "x86-interrupt" fn timer(_: InterruptStackFrame) {
         // print!(".");
+
+        if let Some(writer) = FB_WRITER.get() {
+            writer.lock().tick();
+        }
+
         unsafe { LAPIC.lock().end_of_interrupt() }
     }
 
@@ -57,15 +62,15 @@ mod handlers {
 
         if let Some(KeyEvent::Down(key)) = keyboard::handle_next_scan_code(scancode) {
             match key.code {
-                KeyCode::Unknown(v) => print!("[{v}]"),
-                KeyCode::Extended(ExtendedKeyCode::Unknown(v)) => print!("[e{v}]"),
+                KeyCode::Unknown(v) => println!("[{v}]"),
+                KeyCode::Extended(ExtendedKeyCode::Unknown(v)) => println!("[e{v}]"),
 
-                KeyCode::Extended(ExtendedKeyCode::CursorUp) => print!("\x1B[1A"),
-                KeyCode::Extended(ExtendedKeyCode::CursorDown) => print!("\x1B[1B"),
-                KeyCode::Extended(ExtendedKeyCode::CursorRight) => print!("\x1B[1C"),
-                KeyCode::Extended(ExtendedKeyCode::CursorLeft) => print!("\x1B[1D"),
+                KeyCode::Extended(ExtendedKeyCode::CursorUp) => input!("\x1B[1A"),
+                KeyCode::Extended(ExtendedKeyCode::CursorDown) => input!("\x1B[1B"),
+                KeyCode::Extended(ExtendedKeyCode::CursorRight) => input!("\x1B[1C"),
+                KeyCode::Extended(ExtendedKeyCode::CursorLeft) => input!("\x1B[1D"),
 
-                _ => print!("{}", key.char),
+                _ => input!("{}", key.char),
             }
         }
 

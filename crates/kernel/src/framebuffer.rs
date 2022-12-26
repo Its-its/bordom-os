@@ -1,6 +1,6 @@
 use core::fmt::Write;
 
-use alloc::{collections::VecDeque, vec::Vec};
+use alloc::{collections::VecDeque, vec::Vec, string::String, vec};
 use bootloader_api::info::FrameBufferInfo;
 use common::Position;
 use spin::{Mutex, Once};
@@ -27,16 +27,31 @@ impl Default for TextStyle {
     }
 }
 
+enum CacheType {
+    Char(char),
+    Ansi(Vec<char>),
+}
+
+impl CacheType {
+    pub fn is_char(&self) -> bool {
+        matches!(self, Self::Char(_))
+    }
+}
+
 pub struct FrameBufferWriter {
     buffer: &'static mut [u8],
     info: FrameBufferInfo,
     text_style: TextStyle,
     bytes_per_pixel: usize,
 
-    cached_lines: VecDeque<Vec<char>>,
-    cell: Position<u16>,
+    cached_lines: VecDeque<Vec<CacheType>>,
 
+    cursor_pos: Position<u16>,
     displaying_cursor: bool,
+
+    input_height: u16,
+    input: Vec<char>,
+    is_printing: bool,
 }
 
 impl FrameBufferWriter {
@@ -48,18 +63,32 @@ impl FrameBufferWriter {
             bytes_per_pixel: info.bytes_per_pixel,
 
             cached_lines: VecDeque::with_capacity(500),
-            cell: Position::default(),
 
+            cursor_pos: Position::default(),
             displaying_cursor: false,
+
+            input_height: 1,
+            input: Vec::new(),
+            is_printing: true,
         };
 
         fb.clear();
+        fb.cursor_pos.set_y(fb.screen_pixel_height() - 1);
 
         fb
     }
 
     pub fn tick(&mut self) {
         self.displaying_cursor = !self.displaying_cursor;
+
+        if self.displaying_cursor {
+            let curr = self.text_style.foreground;
+            self.text_style.foreground = ColorName::Green.color();
+            self.draw_glyph_in_cell(self.cursor_pos.inner(), '_');
+            self.text_style.foreground = curr;
+        } else {
+            self.clear_cell(self.cursor_pos.inner());
+        }
     }
 
     fn clear(&mut self) {
@@ -84,6 +113,7 @@ impl FrameBufferWriter {
     }
 
     fn move_buffer_up(&mut self) {
+        // TODO: Move buffer based on cached_lines.
         let font_size = (font::FONT_HEIGHT * font::FONT_SCALE) as usize;
 
         let buffer_line = self.info.width * self.bytes_per_pixel;
@@ -113,49 +143,86 @@ impl FrameBufferWriter {
         }
     }
 
-    fn cursor_next_line(&mut self) {
+    fn process_buffer_check(&mut self) {
         if self.cached_lines.len() == 500 {
             self.cached_lines.pop_front();
         }
 
-        if self.cell.y() + 1 >= self.info.height as u16 / (font::FONT_SCALE * font::FONT_HEIGHT) {
+        if self.cached_lines.len() as u16 + 1 + self.input_height >= self.screen_pixel_height() {
             self.move_buffer_up();
-            self.cell.set_x(0);
-        } else {
-            self.cell.set_x(0);
-            self.cell.inc_y(1);
+        //     self.cursor_pos.set_x(0);
+        // } else {
+        //     self.cursor_pos.set_x(0);
+        //     self.cursor_pos.inc_y(1);
         }
 
         self.cached_lines.push_back(Vec::new());
     }
 
     // TODO: Check string for new line? Move up first then render. Would fix self.buffer overflow
-    fn write_string(&mut self, s: &str) {
+    fn process_string(&mut self, s: &str) {
         let mut chars = s.chars();
 
         while let Some(char) = chars.next() {
-            if char == '\n' {
-                self.cursor_next_line();
+            // Check to see if we're outputting to console or user input
+            if char == '\x01' {
+                self.is_printing = true;
+                continue;
+            } else if char == '\x02' {
+                self.is_printing = false;
                 continue;
             }
 
-            let last_cached_row = self.cached_lines.back_mut().unwrap();
-
-            if char == '\x08' {
-                // TODO: Clear Cell.
-
-                if self.cell.x() != 0 {
-                    self.cell.dec_x(1);
-                    last_cached_row.pop();
+            if char == '\n' {
+                if self.is_printing {
+                    self.process_buffer_check();
                 } else {
-                    // TODO
+                    self.is_printing = true;
+
+                    {
+                        let mut pos = self.cursor_pos;
+
+                        for i in 0..pos.x() + 1 {
+                            pos.set_x(i);
+                            self.clear_cell(pos.inner());
+                        }
+                    }
+
+                    self.cursor_pos.set_x(0);
+
+                    let input = core::mem::take(&mut self.input);
+                    self.write_fmt(format_args!("{}\n", input.into_iter().collect::<String>())).unwrap();
+
+                    self.is_printing = false;
                 }
 
                 continue;
             }
 
-            last_cached_row.push(char);
+            let last_cached_row = self.cached_lines.back_mut().unwrap();
 
+            // Backspace
+            if char == '\x08' {
+                let last_pos = self.cursor_pos.inner();
+
+                if self.cursor_pos.x() != 0 {
+                    self.cursor_pos.dec_x(1);
+
+                    if self.is_printing {
+                        last_cached_row.pop();
+                    } else {
+                        self.input.pop();
+                    }
+                } else {
+                    // TODO
+                }
+
+                self.clear_cell(last_pos);
+
+                continue;
+            }
+
+            // Escape Sequences
             if char == '\x1B' {
                 #[allow(clippy::single_match)]
                 match chars.next() {
@@ -182,6 +249,8 @@ impl FrameBufferWriter {
                                 let mode = items.pop().unwrap();
                                 let color = items.pop().unwrap();
 
+                                last_cached_row.push(CacheType::Ansi(vec!['\x1B', '[', mode, color, 'm']));
+
                                 if mode != '3' && mode != '4' { continue }
 
                                 let color_index = color as u8 - b'0';
@@ -195,6 +264,36 @@ impl FrameBufferWriter {
                                 }
                             }
 
+                            // Cursor Up
+                            Some('A') if !items.is_empty() => {
+                                // TODO
+                            }
+
+                            // Cursor Down
+                            Some('B') if !items.is_empty() => {
+                                // TODO
+                            }
+
+                            // Cursor Forward
+                            Some('C') if !items.is_empty() => {
+                                let amount = items.into_iter().fold(
+                                    0,
+                                    |a, c| a * 10 + c.to_digit(10).unwrap()
+                                ) as u16;
+
+                                self.cursor_pos.inc_x(self.cursor_pos.x().min(amount));
+                            }
+
+                            // Cursor Back
+                            Some('D') if !items.is_empty() => {
+                                let amount = items.into_iter().fold(
+                                    0,
+                                    |a, c| a * 10 + c.to_digit(10).unwrap()
+                                ) as u16;
+
+                                self.cursor_pos.dec_x(amount);
+                            }
+
                             _ => ()
                         }
                     }
@@ -205,12 +304,40 @@ impl FrameBufferWriter {
                 continue;
             }
 
-            self.draw_glyph_in_cell(self.cell.inner(), char);
+            if self.is_printing {
+                last_cached_row.push(CacheType::Char(char));
 
-            if self.cell.x() + 1 >= self.info.width as u16 / (font::FONT_WIDTH * font::FONT_SCALE) {
-                self.cursor_next_line();
+                let last_line_size = last_cached_row.iter().filter(|c| c.is_char()).count().saturating_sub(1);
+                let buff_len = self.cached_lines.len() - 1;
+
+                self.draw_glyph_in_cell((last_line_size as u16, buff_len as u16), char);
             } else {
-                self.cell.inc_x(1);
+                self.input.push(char);
+
+                self.clear_cell(self.cursor_pos.inner());
+                self.draw_glyph_in_cell(self.cursor_pos.inner(), char);
+
+                if self.cursor_pos.x() + 1 >= self.screen_pixel_width() {
+                    // self.cursor_next_line();
+                    // TODO: handle
+                } else {
+                    self.cursor_pos.inc_x(1);
+                }
+            }
+
+        }
+    }
+
+    fn clear_cell(&mut self, (sx, sy): (u16, u16)) {
+        let cell_x = sx * font::FONT_SCALE * font::FONT_WIDTH;
+        let cell_y = sy * font::FONT_SCALE * font::FONT_HEIGHT;
+
+        for y in 0..font::FONT_HEIGHT + 1 {
+            for x in 0..font::FONT_WIDTH {
+                let x = x * font::FONT_SCALE;
+                let y = y * font::FONT_SCALE;
+
+                self.draw_scaled_pixel(self.text_style.background, font::FONT_SCALE, (cell_x + x, cell_y + y));
             }
         }
     }
@@ -271,11 +398,19 @@ impl FrameBufferWriter {
             }
         }
     }
+
+    fn screen_pixel_width(&self) -> u16 {
+        self.info.width as u16 / (font::FONT_WIDTH * font::FONT_SCALE)
+    }
+
+    fn screen_pixel_height(&self) -> u16 {
+        self.info.height as u16 / (font::FONT_HEIGHT * font::FONT_SCALE)
+    }
 }
 
 impl Write for FrameBufferWriter {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.write_string(s);
+        self.process_string(s);
 
         Ok(())
     }
@@ -299,11 +434,16 @@ pub fn _print(args: core::fmt::Arguments) {
 
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ($crate::framebuffer::_print(format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::framebuffer::_print(format_args!("\x01{}", format_args!($($arg)*))));
 }
 
 #[macro_export]
 macro_rules! println {
     ()            => ($crate::print!("\n"));
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! input {
+    ($($arg:tt)*) => ($crate::framebuffer::_print(format_args!("\x02{}", format_args!($($arg)*))));
 }
