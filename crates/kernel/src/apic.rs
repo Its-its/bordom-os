@@ -55,13 +55,10 @@ pub fn init() {
     }
 }
 
-
-const PIC_1_OFFSET: u8 = 0x20;
-const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
-
 unsafe fn disable_pic() {
-    let mut pics = ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET);
+    let mut pics = ChainedPics::new(IOAPIC_IRQ_OFFSET, IOAPIC_IRQ_OFFSET + 8);
     pics.initialize();
+    // Disable 32–47
     pics.disable();
 }
 
@@ -70,7 +67,7 @@ pub enum ApicInterruptIndex {
     Timer = 32,
     Keyboard = 33,
     Error = 60,
-    Spurious = 61,
+    Spurious = 0xFF,
 }
 
 #[repr(u8)]
