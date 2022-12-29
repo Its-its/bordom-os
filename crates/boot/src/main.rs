@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Freeze QEMU instead of rebooting
         // .args([ "-action", "reboot=shutdown,shutdown=pause" ])
         // Send serial output to stdout
-        // .args([ "-serial", "stdio" ])
+        .args([ "-serial", "stdio" ])
         // Display options
         // .args([ "-display", "gtk,gl=on,full-screen=on" ])
         // Increase memory available to QEMU
@@ -44,10 +44,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     }
 
-    cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::piped());
-
     let mut child = cmd.spawn().unwrap();
+
     let wait = child.wait().unwrap();
     wait.exit_ok().unwrap();
 
