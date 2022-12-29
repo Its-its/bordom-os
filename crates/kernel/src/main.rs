@@ -10,7 +10,7 @@ use core::panic::PanicInfo;
 
 use bootloader_api::{entry_point, config::Mapping, BootloaderConfig, BootInfo};
 
-use kernel::{println, font::{FONTS, validate_fonts}, print, color::ColorName};
+use kernel::{println, font::{FONTS, validate_fonts}, print, color::ColorName, task::{Task, Executor, spawn_task}};
 
 #[panic_handler]
 fn panic_handler(info: &PanicInfo) -> ! {
@@ -29,6 +29,8 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     kernel::init(boot_info);
+
+    let mut executor = Executor::new();
 
     debug!("Debug Display");
     info!("Info Display");
@@ -54,5 +56,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     validate_fonts();
 
-    kernel::hlt_loop()
+    executor.spawn(Task::new(kernel::task::keyboard::handle_key_presses()));
+
+    executor.run();
 }

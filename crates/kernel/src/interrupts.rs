@@ -34,7 +34,6 @@ pub fn init() {
 }
 
 mod handlers {
-    use keyboard::{KeyEvent, KeyCode, ExtendedKeyCode};
     use x86_64::{structures::idt::{InterruptStackFrame, PageFaultErrorCode}, instructions::port::Port};
 
     use crate::{println, apic::LAPIC, hlt_loop, framebuffer::FB_WRITER, input};
@@ -58,23 +57,8 @@ mod handlers {
         let mut port = Port::new(0x60);
         let scancode: u8 = unsafe { port.read() };
 
-        // TODO: Quick key combinations can prevent key up codes from activating.
-
-        // println!("- {scancode}");
-
-        if let Some(KeyEvent::Down(key)) = keyboard::handle_next_scan_code(scancode) {
-            match key.code {
-                KeyCode::Unknown(v) => println!("[{v}]"),
-                KeyCode::Extended(ExtendedKeyCode::Unknown(v)) => println!("[e{v}]"),
-
-                KeyCode::Extended(ExtendedKeyCode::CursorUp) => input!("\x1B[1A"),
-                KeyCode::Extended(ExtendedKeyCode::CursorDown) => input!("\x1B[1B"),
-                KeyCode::Extended(ExtendedKeyCode::CursorRight) => input!("\x1B[1C"),
-                KeyCode::Extended(ExtendedKeyCode::CursorLeft) => input!("\x1B[1D"),
-
-                _ => input!("{}", key.char),
-            }
-        }
+        // TODO: DETERMINE if quick key combinations can STILL prevent key up codes from activating.
+        crate::task::keyboard::add_scancode(scancode);
 
         unsafe { LAPIC.lock().end_of_interrupt() }
     }

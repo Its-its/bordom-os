@@ -15,6 +15,7 @@ use x86_64::VirtAddr;
 
 use crate::memory::BootInfoFrameAllocator;
 
+pub mod task;
 pub mod allocator;
 pub mod apic;
 pub mod color;
