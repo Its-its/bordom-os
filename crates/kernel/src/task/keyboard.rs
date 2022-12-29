@@ -5,8 +5,6 @@ use futures_util::{Stream, task::AtomicWaker, StreamExt};
 use keyboard::{ExtendedKeyCode, KeyCode, KeyEvent};
 use lazy_static::lazy_static;
 
-use crate::{println, input};
-
 static WAKER: AtomicWaker = AtomicWaker::new();
 
 lazy_static! {

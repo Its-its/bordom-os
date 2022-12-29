@@ -9,6 +9,8 @@
 
 extern crate alloc;
 
+#[macro_use] extern crate gbl;
+
 use bootloader_api::BootInfo;
 use spin::{Once, Mutex, MutexGuard};
 use x86_64::VirtAddr;

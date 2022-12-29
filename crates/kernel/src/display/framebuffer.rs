@@ -3,6 +3,7 @@ use core::fmt::Write;
 use alloc::{collections::VecDeque, vec::Vec, string::String, vec};
 use bootloader_api::info::FrameBufferInfo;
 use common::Position;
+use gbl::io::{OUTPUT_CODE, USER_INPUT_CODE};
 use spin::{Mutex, Once};
 
 use crate::{font, color::{ColorName, Color}};
@@ -11,6 +12,8 @@ pub static FB_WRITER: Once<Mutex<FrameBufferWriter>> = Once::new();
 
 pub(super) fn init(buffer: &'static mut [u8], info: FrameBufferInfo) {
     FB_WRITER.call_once(|| FrameBufferWriter::new(buffer, info).into());
+
+    gbl::io::set_global_dispatcher(_print);
 }
 
 pub struct TextStyle {
@@ -415,7 +418,7 @@ impl Write for FrameBufferWriter {
     }
 }
 
-pub fn _print(args: core::fmt::Arguments) {
+fn _print(args: core::fmt::Arguments) {
     use x86_64::instructions::interrupts;
 
     interrupts::without_interrupts(|| {
@@ -429,23 +432,4 @@ pub fn _print(args: core::fmt::Arguments) {
             crate::serial_println!("WARN: Framebuffer has not been initialized");
         }
     })
-}
-
-pub const OUTPUT_CODE: char = '\x7E';
-pub const USER_INPUT_CODE: char = '\x7F';
-
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => ($crate::display::framebuffer::_print(format_args!("{}{}", $crate::display::framebuffer::OUTPUT_CODE, format_args!($($arg)*))));
-}
-
-#[macro_export]
-macro_rules! println {
-    ()            => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! input {
-    ($($arg:tt)*) => ($crate::display::framebuffer::_print(format_args!("{}{}", $crate::display::framebuffer::USER_INPUT_CODE, format_args!($($arg)*))));
 }

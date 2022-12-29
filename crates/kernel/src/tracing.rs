@@ -3,7 +3,7 @@ use core::fmt::Write;
 
 use tracing::{Subscriber, Metadata, span, field::Visit, Level};
 
-use crate::{serial_println, Locked, println, color::{ColorExt, ColorName}};
+use crate::{serial_println, Locked, color::{ColorExt, ColorName}};
 
 pub fn init_tracing() {
     tracing::subscriber::set_global_default(Locked::new(KernelTracingSubscriber::new()))

@@ -10,7 +10,9 @@ use core::panic::PanicInfo;
 
 use bootloader_api::{entry_point, config::Mapping, BootloaderConfig, BootInfo};
 
-use kernel::{println, font::{FONTS, validate_fonts}, print, color::ColorName, task::{Task, Executor, spawn_task}};
+#[macro_use] extern crate gbl;
+
+use kernel::{font::{FONTS, validate_fonts}, color::ColorName, task::{Task, Executor, spawn_task}};
 
 #[panic_handler]
 fn panic_handler(info: &PanicInfo) -> ! {

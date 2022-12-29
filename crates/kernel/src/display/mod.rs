@@ -1,6 +1,6 @@
 use bootloader_api::{info::FrameBuffer};
 
-use crate::{println, color};
+use crate::color;
 
 pub mod framebuffer;
 pub mod vga;
