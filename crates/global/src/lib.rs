@@ -6,7 +6,7 @@ pub mod io;
 
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ($crate::io::_print(format_args!("{}{}", $crate::io::OUTPUT_CODE, format_args!($($arg)*))));
+    ($($arg:tt)*) => ($crate::io::_print($crate::io::LogType::Output, format_args!($($arg)*)));
 }
 
 #[macro_export]
@@ -17,5 +17,5 @@ macro_rules! println {
 
 #[macro_export]
 macro_rules! input {
-    ($($arg:tt)*) => ($crate::io::_print(format_args!("{}{}", $crate::io::USER_INPUT_CODE, format_args!($($arg)*))));
+    ($($arg:tt)*) => ($crate::io::_print($crate::io::LogType::UserInput, format_args!($($arg)*)));
 }

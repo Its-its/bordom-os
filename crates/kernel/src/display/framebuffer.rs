@@ -3,7 +3,7 @@ use core::fmt::Write;
 use alloc::{collections::VecDeque, vec::Vec, string::String, vec};
 use bootloader_api::info::FrameBufferInfo;
 use common::Position;
-use gbl::io::{OUTPUT_CODE, USER_INPUT_CODE};
+use gbl::io::LogType;
 use spin::{Mutex, Once};
 
 use crate::{font, color::{ColorName, Color}};
@@ -54,7 +54,7 @@ pub struct FrameBufferWriter {
 
     input_height: u16,
     user_input: Vec<char>,
-    is_printing: bool,
+    log_type: LogType,
 }
 
 impl FrameBufferWriter {
@@ -72,7 +72,7 @@ impl FrameBufferWriter {
 
             input_height: 1,
             user_input: Vec::new(),
-            is_printing: true,
+            log_type: LogType::Output,
         };
 
         fb.clear();
@@ -167,36 +167,31 @@ impl FrameBufferWriter {
         let mut chars = s.chars();
 
         while let Some(char) = chars.next() {
-            // Check to see if we're outputting to console or user input
-            if char == OUTPUT_CODE {
-                self.is_printing = true;
-                continue;
-            } else if char == USER_INPUT_CODE {
-                self.is_printing = false;
-                continue;
-            }
-
             if char == '\n' {
-                if self.is_printing {
-                    self.process_buffer_check();
-                } else {
-                    {
-                        let mut pos = self.cursor_pos;
-
-                        for i in 0..pos.x() + 1 {
-                            pos.set_x(i);
-                            self.clear_cell(pos.inner());
-                        }
+                match self.log_type {
+                    LogType::Output => {
+                        self.process_buffer_check();
                     }
 
-                    self.is_printing = true;
+                    LogType::UserInput => {
+                        {
+                            let mut pos = self.cursor_pos;
 
-                    self.cursor_pos.set_x(0);
+                            for i in 0..pos.x() + 1 {
+                                pos.set_x(i);
+                                self.clear_cell(pos.inner());
+                            }
+                        }
 
-                    let input = core::mem::take(&mut self.user_input);
-                    self.write_fmt(format_args!("{}\n", input.into_iter().collect::<String>())).unwrap();
+                        self.log_type = LogType::Output;
 
-                    self.is_printing = false;
+                        self.cursor_pos.set_x(0);
+
+                        let input = core::mem::take(&mut self.user_input);
+                        self.write_fmt(format_args!("{}\n", input.into_iter().collect::<String>())).unwrap();
+
+                        self.log_type = LogType::UserInput;
+                    }
                 }
 
                 continue;
@@ -211,10 +206,14 @@ impl FrameBufferWriter {
                 if self.cursor_pos.x() != 0 {
                     self.cursor_pos.dec_x(1);
 
-                    if self.is_printing {
-                        last_cached_row.pop();
-                    } else {
-                        self.user_input.pop();
+                    match self.log_type {
+                        LogType::Output => {
+                            last_cached_row.pop();
+                        }
+
+                        LogType::UserInput => {
+                            self.user_input.pop();
+                        }
                     }
                 } else {
                     // TODO
@@ -307,24 +306,28 @@ impl FrameBufferWriter {
                 continue;
             }
 
-            if self.is_printing {
-                last_cached_row.push(CacheType::Char(char));
+            match self.log_type {
+                LogType::Output => {
+                    last_cached_row.push(CacheType::Char(char));
 
-                let last_line_size = last_cached_row.iter().filter(|c| c.is_char()).count().saturating_sub(1);
-                let buff_len = (self.cached_lines.len() - 1).min(self.screen_pixel_height() as usize - 1);
+                    let last_line_size = last_cached_row.iter().filter(|c| c.is_char()).count().saturating_sub(1);
+                    let buff_len = (self.cached_lines.len() - 1).min(self.screen_pixel_height() as usize - 1);
 
-                self.draw_glyph_in_cell((last_line_size as u16, buff_len as u16), char);
-            } else {
-                self.user_input.push(char);
+                    self.draw_glyph_in_cell((last_line_size as u16, buff_len as u16), char);
+                }
 
-                self.clear_cell(self.cursor_pos.inner());
-                self.draw_glyph_in_cell(self.cursor_pos.inner(), char);
+                LogType::UserInput => {
+                    self.user_input.push(char);
 
-                if self.cursor_pos.x() + 1 >= self.screen_pixel_width() {
-                    // self.cursor_next_line();
-                    // TODO: handle
-                } else {
-                    self.cursor_pos.inc_x(1);
+                    self.clear_cell(self.cursor_pos.inner());
+                    self.draw_glyph_in_cell(self.cursor_pos.inner(), char);
+
+                    if self.cursor_pos.x() + 1 >= self.screen_pixel_width() {
+                        // self.cursor_next_line();
+                        // TODO: handle
+                    } else {
+                        self.cursor_pos.inc_x(1);
+                    }
                 }
             }
         }
@@ -418,16 +421,17 @@ impl Write for FrameBufferWriter {
     }
 }
 
-fn _print(args: core::fmt::Arguments) {
+fn _print(type_of: LogType, args: core::fmt::Arguments) {
     use x86_64::instructions::interrupts;
 
     interrupts::without_interrupts(|| {
         crate::serial::_print(args);
 
         if let Some(writer) = FB_WRITER.get() {
-            writer.lock()
-                .write_fmt(args)
-                .expect("Failed to write to framebuffer");
+            let mut writer = writer.lock();
+            writer.log_type = type_of;
+
+            writer.write_fmt(args).expect("Failed to write to framebuffer");
         } else if cfg!(debug_assertions) {
             crate::serial_println!("WARN: Framebuffer has not been initialized");
         }
