@@ -20,6 +20,8 @@ static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
     idt[ApicInterruptIndex::Error as usize].set_handler_fn(handlers::error);
     idt[ApicInterruptIndex::Spurious as usize].set_handler_fn(handlers::spurious);
 
+    // https://github.com/redox-os/kernel/blob/ee6c9f402009ffaa43286437c09f8c1401b56e1f/src/arch/x86_64/idt.rs#L221
+
     idt
 });
 
