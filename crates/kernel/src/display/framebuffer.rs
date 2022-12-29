@@ -436,7 +436,7 @@ pub const USER_INPUT_CODE: char = '\x7F';
 
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ($crate::framebuffer::_print(format_args!("{}{}", $crate::framebuffer::OUTPUT_CODE, format_args!($($arg)*))));
+    ($($arg:tt)*) => ($crate::display::framebuffer::_print(format_args!("{}{}", $crate::display::framebuffer::OUTPUT_CODE, format_args!($($arg)*))));
 }
 
 #[macro_export]
@@ -447,5 +447,5 @@ macro_rules! println {
 
 #[macro_export]
 macro_rules! input {
-    ($($arg:tt)*) => ($crate::framebuffer::_print(format_args!("{}{}", $crate::framebuffer::USER_INPUT_CODE, format_args!($($arg)*))));
+    ($($arg:tt)*) => ($crate::display::framebuffer::_print(format_args!("{}{}", $crate::display::framebuffer::USER_INPUT_CODE, format_args!($($arg)*))));
 }

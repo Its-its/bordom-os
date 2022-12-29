@@ -36,7 +36,7 @@ pub fn init() {
 mod handlers {
     use x86_64::{structures::idt::{InterruptStackFrame, PageFaultErrorCode}, instructions::port::Port};
 
-    use crate::{println, apic::LAPIC, hlt_loop, framebuffer::FB_WRITER, input};
+    use crate::{println, apic::LAPIC, hlt_loop, display::framebuffer::FB_WRITER};
 
     pub extern "x86-interrupt" fn breakpoint(stack_frame: InterruptStackFrame) {
         println!("EXCEPTION: BREAKPOINT");

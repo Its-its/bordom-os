@@ -15,12 +15,13 @@ use x86_64::VirtAddr;
 
 use crate::memory::BootInfoFrameAllocator;
 
+pub mod display;
+pub mod thread;
 pub mod task;
 pub mod allocator;
 pub mod apic;
 pub mod color;
 pub mod font;
-pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
@@ -60,15 +61,8 @@ pub fn init(boot_info: &'static mut BootInfo) {
         .expect("Heap initialization failed");
     println!("[{green}OK{clear}]");
 
-    // Framebuffer Output
-    let fb = boot_info.framebuffer.as_mut().unwrap();
-    let fb_info = fb.info();
-    framebuffer::init(fb.buffer_mut(), fb_info);
-    println!("INIT: Framebuffer... [{green}OK{clear}]");
-    println!("  Dimensions: w {}, h {}", fb_info.width, fb_info.height);
-    println!("  Pixel Format: {:?}", fb_info.pixel_format);
-    println!("  Pixel Size: {}", fb_info.bytes_per_pixel);
-    println!("  Line Stride: {}", fb_info.stride);
+    // Display Initiation
+    display::init(boot_info.framebuffer.as_mut());
 
     // Interrupts
     print!("INIT: Interrupts.... ");
