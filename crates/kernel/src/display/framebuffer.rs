@@ -30,6 +30,7 @@ impl Default for TextStyle {
     }
 }
 
+#[derive(Debug)]
 enum CacheType {
     Char(char),
     Ansi(Vec<char>),
@@ -116,31 +117,100 @@ impl FrameBufferWriter {
     }
 
     fn move_buffer_up(&mut self) {
-        // TODO: Move buffer based on cached_lines.
-        let font_size = (font::FONT_HEIGHT * font::FONT_SCALE) as usize;
+        const FONT_HEIGHT_SCALED: usize = (font::FONT_HEIGHT * font::FONT_SCALE) as usize;
+        const FONT_WIDTH_SCALED: usize = (font::FONT_WIDTH * font::FONT_SCALE) as usize;
+
+        let bg_color = ColorName::Background.color().to_framebuffer_pixel();
 
         let buffer_line = self.info.width * self.bytes_per_pixel;
 
-        let font_buffer_line_size = font_size * buffer_line;
-        let line_offset = buffer_line * 2;
-        // TODO: Line offset may be incorrect.
+        let font_buffer_line_size = FONT_HEIGHT_SCALED * buffer_line;
 
-        // Move Buffer Up
-        let mut i = 0;
-        let num_subpixels = self.buffer.len() - (font_buffer_line_size + line_offset);
-        while i < num_subpixels {
-            self.buffer[i + line_offset] = self.buffer[i + font_buffer_line_size + line_offset];
+        //
 
-            i += 1;
+        let pix_height = self.screen_pixel_height() as usize;
+
+        // TODO: When the buffer moves isn't always correct.
+        let line_widths = self.cached_lines.range(self.cached_lines.len().saturating_sub(pix_height - 1)..)
+            .map(|v| v.iter().filter(|v| v.is_char()).count())
+            .collect::<Vec<_>>();
+
+        for i in 1..line_widths.len() {
+            let prev_width = line_widths[i - 1];
+            let curr_width = line_widths[i];
+
+            let prev_line_width = prev_width * FONT_WIDTH_SCALED * self.bytes_per_pixel;
+            let curr_line_width = curr_width * FONT_WIDTH_SCALED * self.bytes_per_pixel;
+
+            let px = (i - 1) * font_buffer_line_size;
+            let cx = i * font_buffer_line_size;
+
+            // TODO: Simplify. No need for two for loops.
+            if prev_width != 0 && prev_width > curr_width{
+                for x in 0..self.bytes_per_pixel * prev_width * FONT_HEIGHT_SCALED * FONT_WIDTH_SCALED {
+                    let prev_pos = x % prev_line_width;
+
+                    if prev_pos > curr_line_width {
+                        let index = px
+                            + (x % prev_line_width)
+                            + buffer_line * (x / prev_line_width);
+                        self.buffer[index] = bg_color[index % 3];
+                    } else {
+                        self.buffer[
+                            px
+                                // X
+                                + (x % prev_line_width)
+                                // Y
+                                + buffer_line * (x / prev_line_width)
+                        ] =
+                        self.buffer[
+                            cx
+                                // X
+                                + (x % prev_line_width)
+                                // Y
+                                + buffer_line * (x / prev_line_width)
+                        ];
+                    }
+                }
+            } else {
+                for x in 0..self.bytes_per_pixel * curr_width * FONT_HEIGHT_SCALED * FONT_WIDTH_SCALED {
+                    self.buffer[
+                        px
+                            // X
+                            + (x % curr_line_width)
+                            // Y
+                            + buffer_line * (x / curr_line_width)
+                    ] =
+                    self.buffer[
+                        cx
+                            // X
+                            + (x % curr_line_width)
+                            // Y
+                            + buffer_line * (x / curr_line_width)
+                    ];
+                }
+            }
         }
 
-        // Clear last line
-        let bg = ColorName::Background.color().to_framebuffer_pixel();
+        // TODO: Move buffer based on cached_lines.
+        // let line_offset = buffer_line * 2;
+        // // TODO: Line offset may be incorrect.
 
-        let mut i = self.buffer.len() - font_buffer_line_size;
+        // // Move Buffer Up
+        // let mut i = 0;
+        // let num_subpixels = self.buffer.len() - (font_buffer_line_size + line_offset);
+        // while i < num_subpixels {
+        //     self.buffer[i + line_offset] = self.buffer[i + font_buffer_line_size + line_offset];
+
+        //     i += 1;
+        // }
+
+        // Clear last line
+        // TODO: Remove the previous line clear. We should only be clearing the user input one.
+        let mut i = self.buffer.len() - font_buffer_line_size * 2;
         let num_subpixels = self.buffer.len();
         while i < num_subpixels {
-            self.buffer[i] = bg[i % 3];
+            self.buffer[i] = bg_color[i % 3];
 
             i += 1;
         }
@@ -311,7 +381,7 @@ impl FrameBufferWriter {
                     last_cached_row.push(CacheType::Char(char));
 
                     let last_line_size = last_cached_row.iter().filter(|c| c.is_char()).count().saturating_sub(1);
-                    let buff_len = (self.cached_lines.len() - 1).min(self.screen_pixel_height() as usize - 1);
+                    let buff_len = (self.cached_lines.len() - 1).min(self.screen_pixel_height() as usize - 2);
 
                     self.draw_glyph_in_cell((last_line_size as u16, buff_len as u16), char);
                 }
