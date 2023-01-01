@@ -17,6 +17,7 @@ use x86_64::VirtAddr;
 
 use crate::memory::BootInfoFrameAllocator;
 
+pub mod ps2;
 pub mod display;
 pub mod thread;
 pub mod task;

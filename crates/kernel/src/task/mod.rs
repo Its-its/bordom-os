@@ -1,9 +1,8 @@
 use core::{future::Future, pin::Pin, task::{Context, Poll}, sync::atomic::{AtomicU64, Ordering}};
 use alloc::boxed::Box;
-use crossbeam_queue::ArrayQueue;
-use lazy_static::lazy_static;
 
 pub mod keyboard;
+pub mod output;
 mod executor;
 
 pub use executor::Executor;
@@ -49,7 +48,8 @@ impl Task {
     }
 }
 
-pub fn spawn_task(future: impl Future<Output = ()> + 'static) -> bool {
+pub fn spawn_task(_future: impl Future<Output = ()> + 'static) -> bool {
     // PENDING_TASKS.push(Task::new(future)).is_ok()
 
-false}
+    false
+}

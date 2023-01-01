@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::new("qemu-system-x86_64");
     cmd
         // Freeze QEMU instead of rebooting
-        // .args([ "-action", "reboot=shutdown,shutdown=pause" ])
+        .args([ "-action", "reboot=shutdown,shutdown=pause" ])
         // Send serial output to stdout
         .args([ "-serial", "stdio" ])
         // Display options

@@ -13,6 +13,7 @@ use bootloader_api::{entry_point, config::Mapping, BootloaderConfig, BootInfo};
 #[macro_use] extern crate gbl;
 
 use kernel::{font::{FONTS, validate_fonts}, color::ColorName, task::{Task, Executor, spawn_task}};
+use x86_64::instructions::port::Port;
 
 #[panic_handler]
 fn panic_handler(info: &PanicInfo) -> ! {
@@ -58,7 +59,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     validate_fonts();
 
+    for i in 0..13 {
+        println!("ASDF FSAF {}", 10usize.pow(i));
+    }
+
     executor.spawn(Task::new(kernel::task::keyboard::handle_key_presses()));
+    executor.spawn(Task::new(kernel::task::output::handle_output()));
 
     executor.run();
 }

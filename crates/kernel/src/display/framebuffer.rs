@@ -1,6 +1,6 @@
 use core::fmt::Write;
 
-use alloc::{collections::VecDeque, vec::Vec, string::String, vec};
+use alloc::{collections::VecDeque, vec::Vec, string::String, vec, format};
 use bootloader_api::info::FrameBufferInfo;
 use common::Position;
 use gbl::io::LogType;
@@ -13,7 +13,13 @@ pub static FB_WRITER: Once<Mutex<FrameBufferWriter>> = Once::new();
 pub(super) fn init(buffer: &'static mut [u8], info: FrameBufferInfo) {
     FB_WRITER.call_once(|| FrameBufferWriter::new(buffer, info).into());
 
-    gbl::io::set_global_dispatcher(_print);
+    gbl::io::set_global_dispatcher(|type_of: LogType, args: core::fmt::Arguments| {
+        if type_of == LogType::Output {
+            crate::task::output::add_output(format!("{args}"));
+        } else {
+            _print(type_of, args);
+        }
+    });
 }
 
 pub struct TextStyle {
@@ -66,7 +72,8 @@ impl FrameBufferWriter {
             text_style: TextStyle::default(),
             bytes_per_pixel: info.bytes_per_pixel,
 
-            cached_lines: VecDeque::with_capacity(500),
+            // TODO: This w/ capacity of 500 caused Double Faults when allocating inner Vecs.
+            cached_lines: VecDeque::with_capacity(128),
 
             cursor_pos: Position::default(),
             displaying_cursor: false,
@@ -217,7 +224,7 @@ impl FrameBufferWriter {
     }
 
     fn process_buffer_check(&mut self) {
-        if self.cached_lines.len() == 500 {
+        if self.cached_lines.len() == self.cached_lines.capacity() {
             self.cached_lines.pop_front();
         }
 
@@ -378,6 +385,7 @@ impl FrameBufferWriter {
 
             match self.log_type {
                 LogType::Output => {
+                    // TODO: Not able to reserve more capacity.
                     last_cached_row.push(CacheType::Char(char));
 
                     let last_line_size = last_cached_row.iter().filter(|c| c.is_char()).count().saturating_sub(1);
@@ -491,7 +499,7 @@ impl Write for FrameBufferWriter {
     }
 }
 
-fn _print(type_of: LogType, args: core::fmt::Arguments) {
+pub(crate) fn _print(type_of: LogType, args: core::fmt::Arguments) {
     use x86_64::instructions::interrupts;
 
     interrupts::without_interrupts(|| {

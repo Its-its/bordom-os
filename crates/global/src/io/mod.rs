@@ -20,7 +20,7 @@ pub fn _print(type_of: LogType, args: Arguments) {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogType {
     Output,
     UserInput,

@@ -43,6 +43,14 @@ pub static mut IOAPIC: Lazy<Mutex<IoApic>> = Lazy::new(|| unsafe {
 
     ioapic.enable_irq(IrqVector::Keyboard as u8);
 
+    let mut mouse_entry = ioapic.table_entry(IrqVector::Mouse as u8);
+    mouse_entry.set_mode(IrqMode::Fixed);
+    mouse_entry.set_flags(IrqFlags::MASKED);
+    mouse_entry.set_dest(apic_id as u8);
+    ioapic.set_table_entry(IrqVector::Mouse as u8, mouse_entry);
+
+    ioapic.enable_irq(IrqVector::Mouse as u8);
+
     ioapic.into()
 });
 
@@ -66,11 +74,13 @@ unsafe fn disable_pic() {
 pub enum ApicInterruptIndex {
     Timer = 32,
     Keyboard = 33,
+    Mouse = 32 + 0xC,
     Error = 60,
     Spurious = 0xFF,
 }
 
 #[repr(u8)]
 pub enum IrqVector {
-    Keyboard = 1
+    Keyboard = 1,
+    Mouse = 0xC,
 }

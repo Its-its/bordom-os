@@ -17,6 +17,7 @@ static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
 
     idt[ApicInterruptIndex::Timer as usize].set_handler_fn(handlers::timer);
     idt[ApicInterruptIndex::Keyboard as usize].set_handler_fn(handlers::keyboard);
+    idt[ApicInterruptIndex::Mouse as usize].set_handler_fn(handlers::mouse);
     idt[ApicInterruptIndex::Error as usize].set_handler_fn(handlers::error);
     idt[ApicInterruptIndex::Spurious as usize].set_handler_fn(handlers::spurious);
 
@@ -30,17 +31,42 @@ pub fn init() {
         crate::gdt::init();
     }
 
+    // TODO: Move. Mouse Initiation.
+    {
+        use crate::ps2::*;
+
+        if let Err(e) = set_mouse_id(MouseId::Four) {
+            println!("Failed to set the mouse id to four: {e}");
+            // panic!("Failed to set the mouse id to four");
+        }
+
+        // Read it back to check that it worked.
+        match mouse_id() {
+            Ok(id) =>  {
+                println!("The PS/2 mouse ID is: {id:?}");
+
+                if !matches!(id, MouseId::Four) {
+                    println!("Failed to set the mouse id to four");
+                }
+            }
+
+            Err(e) => {
+                println!("Failed to read the PS/2 mouse ID: {e}");
+            }
+        }
+    }
+
     IDT.load();
 }
 
 mod handlers {
     use x86_64::{structures::idt::{InterruptStackFrame, PageFaultErrorCode}, instructions::port::Port};
 
-    use crate::{apic::LAPIC, hlt_loop, display::framebuffer::FB_WRITER};
+    use crate::{apic::LAPIC, hlt_loop, display::framebuffer::FB_WRITER, ps2};
 
     pub extern "x86-interrupt" fn breakpoint(stack_frame: InterruptStackFrame) {
-        println!("EXCEPTION: BREAKPOINT");
-        println!("{stack_frame:#?}");
+        crate::serial_println!("EXCEPTION: BREAKPOINT");
+        crate::serial_println!("{stack_frame:#?}");
     }
 
     pub extern "x86-interrupt" fn timer(_: InterruptStackFrame) {
@@ -63,31 +89,37 @@ mod handlers {
         unsafe { LAPIC.lock().end_of_interrupt() }
     }
 
+    pub extern "x86-interrupt" fn mouse(_: InterruptStackFrame) {
+        let _packet = ps2::read_mouse_packet(&ps2::MouseId::Four);
+
+        unsafe { LAPIC.lock().end_of_interrupt() }
+    }
+
     pub extern "x86-interrupt" fn error(stack_frame: InterruptStackFrame) {
-        println!("RECEIVED ERROR INTERRUPT: {stack_frame:#?}");
+        crate::serial_println!("RECEIVED ERROR INTERRUPT: {stack_frame:#?}");
         unsafe { LAPIC.lock().end_of_interrupt() }
     }
 
     pub extern "x86-interrupt" fn spurious(stack_frame: InterruptStackFrame) {
-        println!("RECEIVED SPURIOUS INTERRUPT: {stack_frame:#?}");
+        crate::serial_println!("RECEIVED SPURIOUS INTERRUPT: {stack_frame:#?}");
         unsafe { LAPIC.lock().end_of_interrupt() }
     }
 
     pub extern "x86-interrupt" fn page_fault(stack_frame: InterruptStackFrame, error_code: PageFaultErrorCode) {
-        println!("PAGE_FAULT:");
-        println!("error code {error_code:?}");
-        println!("{stack_frame:#?}");
+        crate::serial_println!("PAGE_FAULT:");
+        crate::serial_println!("error code {error_code:?}");
+        crate::serial_println!("{stack_frame:#?}");
     }
 
     pub extern "x86-interrupt" fn general_protection(_stack_frame: InterruptStackFrame, error_code: u64) {
-        println!("GENERAL PROTECTION FAULT:");
+        crate::serial_println!("GENERAL PROTECTION FAULT:");
 
         if error_code > 0 {
             let ssi = error_code;
 
-            println!("  Segment Selector:");
-            println!("    External: {}", if ssi & 1 == 1 { "yes" } else { "no" });
-            println!("    Table: {}",
+            crate::serial_println!("  Segment Selector:");
+            crate::serial_println!("    External: {}", if ssi & 1 == 1 { "yes" } else { "no" });
+            crate::serial_println!("    Table: {}",
                 match (ssi & 0b110) >> 1 {
                     0b00 => "GDT",
                     0b01 => "IDT",
@@ -96,9 +128,9 @@ mod handlers {
                     _ => unreachable!()
                 }
             );
-            println!("    Index: {}", (ssi & 0b1_1111_1111_1111) >> 3);
+            crate::serial_println!("    Index: {}", (ssi & 0b1_1111_1111_1111) >> 3);
         } else {
-            println!("error code {error_code:?}");
+            crate::serial_println!("error code {error_code:?}");
         }
 
         hlt_loop();
@@ -107,9 +139,9 @@ mod handlers {
     }
 
     pub extern "x86-interrupt" fn double_fault(stack_frame: InterruptStackFrame, error_code: u64) -> ! {
-        println!("DOUBLE FAULT:");
-        println!("error code {error_code:?}");
-        println!("{stack_frame:#?}");
+        crate::serial_println!("DOUBLE FAULT:");
+        crate::serial_println!("error code {error_code:?}");
+        crate::serial_println!("{stack_frame:#?}");
 
         panic!("double fault");
     }
