@@ -39,6 +39,12 @@ impl<V: Default> Default for Dimensions<V> {
     }
 }
 
+impl<V> From<(V, V)> for Dimensions<V> {
+    fn from(value: (V, V)) -> Self {
+        Self(value.0, value.1)
+    }
+}
+
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

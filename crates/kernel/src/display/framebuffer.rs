@@ -2,7 +2,7 @@ use core::fmt::Write;
 
 use alloc::{collections::VecDeque, vec::Vec, string::String, vec, format};
 use bootloader_api::info::FrameBufferInfo;
-use common::Position;
+use common::{user::ConsoleCursor, Dimensions};
 use gbl::io::LogType;
 use spin::{Mutex, Once};
 
@@ -56,12 +56,10 @@ pub struct FrameBufferWriter {
 
     cached_lines: VecDeque<Vec<CacheType>>,
 
-    cursor_pos: Position<u16>,
-    displaying_cursor: bool,
-
     input_height: u16,
-    user_input: Vec<char>,
     log_type: LogType,
+
+    cursor: ConsoleCursor,
 }
 
 impl FrameBufferWriter {
@@ -75,30 +73,26 @@ impl FrameBufferWriter {
             // TODO: This w/ capacity of 500 caused Double Faults when allocating inner Vecs.
             cached_lines: VecDeque::with_capacity(128),
 
-            cursor_pos: Position::default(),
-            displaying_cursor: false,
-
             input_height: 1,
-            user_input: Vec::new(),
             log_type: LogType::Output,
+
+            cursor: ConsoleCursor::default(),
         };
 
         fb.clear();
-        fb.cursor_pos.set_y(fb.screen_pixel_height() - 1);
+        fb.cursor.set_y(fb.screen_pixel_height() - 1);
 
         fb
     }
 
     pub fn tick(&mut self) {
-        self.displaying_cursor = !self.displaying_cursor;
-
-        if self.displaying_cursor {
+        if self.cursor.toggle_displayed() {
             let curr = self.text_style.foreground;
             self.text_style.foreground = ColorName::Green.color();
-            self.draw_glyph_in_cell(self.cursor_pos.inner(), '_');
+            self.draw_glyph_in_cell(self.cursor.pos().inner(), '_');
             self.text_style.foreground = curr;
         } else {
-            self.clear_cell(self.cursor_pos.inner());
+            self.clear_cell(self.cursor.pos().inner());
         }
     }
 
@@ -252,7 +246,7 @@ impl FrameBufferWriter {
 
                     LogType::UserInput => {
                         {
-                            let mut pos = self.cursor_pos;
+                            let mut pos = self.cursor.pos();
 
                             for i in 0..pos.x() + 1 {
                                 pos.set_x(i);
@@ -262,9 +256,7 @@ impl FrameBufferWriter {
 
                         self.log_type = LogType::Output;
 
-                        self.cursor_pos.set_x(0);
-
-                        let input = core::mem::take(&mut self.user_input);
+                        let input = self.cursor.take_input();
                         self.write_fmt(format_args!("{}\n", input.into_iter().collect::<String>())).unwrap();
 
                         self.log_type = LogType::UserInput;
@@ -278,22 +270,16 @@ impl FrameBufferWriter {
 
             // Backspace
             if char == '\x08' {
-                let last_pos = self.cursor_pos.inner();
+                let last_pos = self.cursor.pos().inner();
 
-                if self.cursor_pos.x() != 0 {
-                    self.cursor_pos.dec_x(1);
-
-                    match self.log_type {
-                        LogType::Output => {
-                            last_cached_row.pop();
-                        }
-
-                        LogType::UserInput => {
-                            self.user_input.pop();
-                        }
+                match self.log_type {
+                    LogType::Output => {
+                        last_cached_row.pop();
                     }
-                } else {
-                    // TODO
+
+                    LogType::UserInput => {
+                        self.cursor.backspace();
+                    }
                 }
 
                 self.clear_cell(last_pos);
@@ -358,9 +344,9 @@ impl FrameBufferWriter {
                                 let amount = items.into_iter().fold(
                                     0,
                                     |a, c| a * 10 + c.to_digit(10).unwrap()
-                                ) as u16;
+                                ) as i32;
 
-                                self.cursor_pos.inc_x(self.cursor_pos.x().min(amount));
+                                self.cursor.move_me(amount, 0);
                             }
 
                             // Cursor Back
@@ -368,9 +354,9 @@ impl FrameBufferWriter {
                                 let amount = items.into_iter().fold(
                                     0,
                                     |a, c| a * 10 + c.to_digit(10).unwrap()
-                                ) as u16;
+                                ) as i32;
 
-                                self.cursor_pos.dec_x(amount);
+                                self.cursor.move_me(-amount, 0);
                             }
 
                             _ => ()
@@ -395,17 +381,13 @@ impl FrameBufferWriter {
                 }
 
                 LogType::UserInput => {
-                    self.user_input.push(char);
+                    self.clear_cell(self.cursor.pos().inner());
+                    self.draw_glyph_in_cell(self.cursor.pos().inner(), char);
 
-                    self.clear_cell(self.cursor_pos.inner());
-                    self.draw_glyph_in_cell(self.cursor_pos.inner(), char);
-
-                    if self.cursor_pos.x() + 1 >= self.screen_pixel_width() {
-                        // self.cursor_next_line();
-                        // TODO: handle
-                    } else {
-                        self.cursor_pos.inc_x(1);
-                    }
+                    self.cursor.insert_input(
+                        char,
+                        self.screen_dimensions()
+                    );
                 }
             }
         }
@@ -488,6 +470,13 @@ impl FrameBufferWriter {
 
     fn screen_pixel_height(&self) -> u16 {
         self.info.height as u16 / (font::FONT_HEIGHT * font::FONT_SCALE)
+    }
+
+    fn screen_dimensions(&self) -> Dimensions<u16> {
+        Dimensions::from((
+            self.screen_pixel_width(),
+            self.screen_pixel_height()
+        ))
     }
 }
 
