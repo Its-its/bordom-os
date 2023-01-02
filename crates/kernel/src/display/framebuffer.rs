@@ -70,8 +70,7 @@ impl FrameBufferWriter {
             text_style: TextStyle::default(),
             bytes_per_pixel: info.bytes_per_pixel,
 
-            // TODO: This w/ capacity of 500 caused Double Faults when allocating inner Vecs.
-            cached_lines: VecDeque::with_capacity(128),
+            cached_lines: VecDeque::with_capacity(256),
 
             input_height: 1,
             log_type: LogType::Output,
@@ -371,7 +370,6 @@ impl FrameBufferWriter {
 
             match self.log_type {
                 LogType::Output => {
-                    // TODO: Not able to reserve more capacity.
                     last_cached_row.push(CacheType::Char(char));
 
                     let last_line_size = last_cached_row.iter().filter(|c| c.is_char()).count().saturating_sub(1);

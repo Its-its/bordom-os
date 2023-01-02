@@ -1,6 +1,6 @@
 use bootloader_api::info::{MemoryRegions, MemoryRegionKind};
 use x86_64::structures::paging::{
-    FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PhysFrame, Size4KiB,
+    FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PhysFrame, Size4KiB, PageSize,
 };
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -90,7 +90,7 @@ impl BootInfoFrameAllocator {
             // Map each region to its address range
             .map(|r| r.start..r.end)
             // Transform into iterator of frame start addresses
-            .flat_map(|r| r.step_by(4096))
+            .flat_map(|r| r.step_by(Size4KiB::SIZE as usize))
             // Create `PhysFrame` types from the start addrs
             .map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
     }
