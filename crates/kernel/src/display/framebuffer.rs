@@ -70,7 +70,7 @@ impl FrameBufferWriter {
             text_style: TextStyle::default(),
             bytes_per_pixel: info.bytes_per_pixel,
 
-            cached_lines: VecDeque::with_capacity(256),
+            cached_lines: VecDeque::with_capacity(500),
 
             input_height: 1,
             log_type: LogType::Output,
@@ -85,7 +85,9 @@ impl FrameBufferWriter {
     }
 
     pub fn tick(&mut self) {
-        if self.cursor.toggle_displayed() {
+        self.cursor.update();
+
+        if self.cursor.is_displayed() {
             let curr = self.text_style.foreground;
             self.text_style.foreground = ColorName::Green.color();
             self.draw_glyph_in_cell(self.cursor.pos().inner(), '_');

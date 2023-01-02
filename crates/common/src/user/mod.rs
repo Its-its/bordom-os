@@ -9,15 +9,27 @@ use crate::{Position, Dimensions};
 pub struct ConsoleCursor {
     pos: Position<u16>,
 
+    display_time: usize,
     displayed: bool,
 
     input: Vec<char>,
 }
 
 impl ConsoleCursor {
+    pub fn update(&mut self) {
+        // TODO: Use accurate calculations.
+        // around every ~1.5 seconds
+        self.displayed = (self.display_time / 100) % 2 == 0;
+        self.display_time = self.display_time.wrapping_add(1);
+    }
+
     /// Toggles display. Returns the new value.
     pub fn toggle_displayed(&mut self) -> bool {
         self.displayed = !self.displayed;
+        self.displayed
+    }
+
+    pub fn is_displayed(&self) -> bool {
         self.displayed
     }
 
