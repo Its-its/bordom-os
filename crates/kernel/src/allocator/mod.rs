@@ -1,3 +1,5 @@
+use core::sync::atomic::Ordering;
+
 use alloc::alloc::Layout;
 
 use x86_64::{structures::paging::{Mapper, Size4KiB, FrameAllocator, Page, mapper::MapToError, PageTableFlags}, VirtAddr};
@@ -16,6 +18,10 @@ static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAl
 #[alloc_error_handler]
 fn alloc_error_handler(layout: Layout) -> ! {
     panic!("allocation error: {layout:#?}");
+}
+
+pub fn get_allocated() -> usize {
+    HEAP_SIZE - ALLOCATOR.lock().remaining.load(Ordering::SeqCst)
 }
 
 pub(crate) fn init_heap<M, F>(mapper: &mut M, frame_allocator: &mut F) -> Result<(), MapToError<Size4KiB>>

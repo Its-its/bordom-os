@@ -1,4 +1,4 @@
-use core::{alloc::{GlobalAlloc, Layout}, ptr::{self, NonNull}};
+use core::{alloc::{GlobalAlloc, Layout}, ptr::{self, NonNull}, sync::atomic::{AtomicUsize, Ordering}};
 
 use crate::Locked;
 
@@ -17,7 +17,9 @@ struct ListNode {
 
 pub struct FixedSizeBlockAllocator {
     list_heads: [Option<&'static mut ListNode>; BLOCK_SIZES.len()],
-    fallback_allocator: linked_list_allocator::Heap
+    fallback_allocator: linked_list_allocator::Heap,
+
+    pub(crate) remaining: AtomicUsize,
 }
 
 impl FixedSizeBlockAllocator {
@@ -26,7 +28,9 @@ impl FixedSizeBlockAllocator {
 
         FixedSizeBlockAllocator {
             list_heads: [EMPTY; BLOCK_SIZES.len()],
-            fallback_allocator: linked_list_allocator::Heap::empty()
+            fallback_allocator: linked_list_allocator::Heap::empty(),
+
+            remaining: AtomicUsize::new(super::HEAP_SIZE),
         }
     }
 
@@ -50,6 +54,8 @@ impl FixedSizeBlockAllocator {
 unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let mut allocator = self.lock();
+
+		let _ = allocator.remaining.fetch_sub(layout.size(), Ordering::Acquire);
 
         match list_index(&layout) {
             Some(index) => {
@@ -75,6 +81,8 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let mut allocator = self.lock();
+
+        let _ = allocator.remaining.fetch_add(layout.size(), Ordering::Acquire);
 
         match list_index(&layout) {
             Some(index) => {
