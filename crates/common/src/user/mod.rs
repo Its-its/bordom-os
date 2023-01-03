@@ -37,6 +37,10 @@ impl ConsoleCursor {
         self.pos
     }
 
+    pub fn set_x(&mut self, value: u16) {
+        self.pos.set_x(value);
+    }
+
     pub fn set_y(&mut self, value: u16) {
         self.pos.set_y(value);
     }
