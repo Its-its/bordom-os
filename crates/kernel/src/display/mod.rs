@@ -1,9 +1,9 @@
 use alloc::{collections::VecDeque, vec::Vec};
 use bootloader_api::{info::FrameBuffer};
 use common::{Dimensions, user::ConsoleCursor};
-use gbl::io::LogType;
+use gbl::io::{LogType, ColorName, Color};
 
-use crate::{color::{self, Color, ColorName}, font::{FONT_HEIGHT, FONT_WIDTH, FONT_SCALE, FONTS}};
+use crate::font::{FONT_HEIGHT, FONT_WIDTH, FONT_SCALE, FONTS};
 
 pub mod framebuffer;
 pub mod vga;
@@ -14,8 +14,8 @@ const FONT_WIDTH_SCALED: usize = FONT_WIDTH as usize * FONT_SCALE as usize;
 
 
 pub fn init(fb: Option<&'static mut FrameBuffer>) {
-    let green = color::ColorName::Green.ansi();
-    let clear = color::ColorName::Foreground.ansi();
+    let green = ColorName::Green.ansi();
+    let clear = ColorName::DefaultForeground.ansi();
 
     // Framebuffer Output
     if let Some(fb) = fb {
@@ -151,7 +151,7 @@ impl ConsoleContainer {
         self.cached_lines.clear();
         self.cached_lines.push_back(Vec::new());
 
-        let bg = ColorName::Background.color().to_framebuffer_pixel();
+        let bg = ColorName::DefaultBackground.color().to_framebuffer_pixel();
 
         // This is faster than using for i in 0..num_subpixels,
         // since for loops use the `Iterator` trait under the hood,
@@ -169,7 +169,7 @@ impl ConsoleContainer {
     }
 
     fn move_buffer_up(&mut self, buffer: &mut [u8]) {
-        let bg_color = ColorName::Background.color().to_framebuffer_pixel();
+        let bg_color = ColorName::DefaultBackground.color().to_framebuffer_pixel();
 
         let buffer_line = self.dim_pixel_width();
 
@@ -380,8 +380,8 @@ pub struct TextStyle {
 impl Default for TextStyle {
     fn default() -> Self {
         TextStyle {
-            foreground: ColorName::Foreground.color(),
-            background: ColorName::Background.color(),
+            foreground: ColorName::DefaultForeground.color(),
+            background: ColorName::DefaultBackground.color(),
         }
     }
 }

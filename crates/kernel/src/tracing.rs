@@ -1,9 +1,10 @@
 use alloc::{collections::BTreeMap, string::{String, ToString}};
+use gbl::io::ColorName;
 use core::fmt::Write;
 
 use tracing::{Subscriber, Metadata, span, field::Visit, Level};
 
-use crate::{serial_println, Locked, color::{ColorExt, ColorName}};
+use crate::{serial_println, Locked, color::ColorExt};
 
 pub fn init_tracing() {
     tracing::subscriber::set_global_default(Locked::new(KernelTracingSubscriber::new()))

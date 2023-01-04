@@ -1,6 +1,10 @@
+use alloc::boxed::Box;
 use core::fmt::Arguments;
 
-use alloc::boxed::Box;
+pub mod ansi;
+pub mod color;
+
+pub use color::{Color, ColorName};
 
 #[allow(clippy::type_complexity)]
 static mut GLOBAL_DISPATCH: Option<Box<dyn Fn(LogType, Arguments)>> = None;

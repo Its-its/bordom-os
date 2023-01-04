@@ -12,8 +12,8 @@ use bootloader_api::{entry_point, config::Mapping, BootloaderConfig, BootInfo};
 
 #[macro_use] extern crate gbl;
 
-use kernel::{font::{FONTS, validate_fonts}, color::ColorName, task::{Task, Executor, spawn_task}};
-use x86_64::instructions::port::Port;
+use gbl::io::ColorName;
+use kernel::{font::{FONTS, validate_fonts}, task::{Task, Executor}};
 
 #[panic_handler]
 fn panic_handler(info: &PanicInfo) -> ! {
@@ -55,7 +55,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         print!("{color}{}  ", glyph.charlie);
     }
 
-    println!("{}", ColorName::Foreground.ansi());
+    println!("{}", ColorName::DefaultForeground.ansi());
 
     validate_fonts();
 

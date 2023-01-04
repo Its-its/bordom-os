@@ -1,14 +1,14 @@
 use core::fmt::Write;
 
-use alloc::{vec::Vec, string::String, vec, format};
+use alloc::{string::String, format};
 use bootloader_api::info::FrameBufferInfo;
 use common::Dimensions;
-use gbl::io::LogType;
+use gbl::io::{LogType, ansi};
 use spin::{Mutex, Once};
 
-use crate::{color::ColorName, allocator::get_allocated};
+use crate::allocator::get_allocated;
 
-use super::{ConsoleContainer, CacheType};
+use super::ConsoleContainer;
 
 pub static FB_WRITER: Once<Mutex<FrameBufferWriter>> = Once::new();
 
@@ -54,10 +54,65 @@ impl FrameBufferWriter {
 
     // TODO: Check string for new line? Move up first then render. Would fix self.buffer overflow
     fn process_string(&mut self, s: &str) {
-        let mut chars = s.chars();
+        let mut chars = s.chars().peekable();
 
-        while let Some(char) = chars.next() {
+        while let Some(&char) = chars.peek() {
             // TODO: Where to store these string processors?
+            if let Some(ansi) = ansi::try_parse_ansi(&mut chars) {
+                if let Some(ansi) = ansi {
+                    match ansi {
+                        ansi::Ansi::Bell => todo!(),
+                        ansi::Ansi::Backspace => todo!(),
+                        ansi::Ansi::Tab => todo!(),
+                        ansi::Ansi::LineFeed => todo!(),
+                        ansi::Ansi::FormFeed => todo!(),
+                        ansi::Ansi::CarriageReturn => todo!(),
+                        ansi::Ansi::Escape(escape) => match escape {
+                            ansi::AnsiEscape::SingleShiftTwo => todo!(),
+                            ansi::AnsiEscape::SingleShiftThree => todo!(),
+                            ansi::AnsiEscape::DeviceControlString => todo!(),
+                            ansi::AnsiEscape::ControlSequenceIntroducer(csi) => match csi {
+                                ansi::AnsiEscapeCSI::CursorUp(_) => todo!(),
+                                ansi::AnsiEscapeCSI::CursorDown(_) => todo!(),
+                                ansi::AnsiEscapeCSI::CursorForward(amount) => self.console.move_cursor(amount as i32, 0),
+                                ansi::AnsiEscapeCSI::CursorBack(amount) => self.console.move_cursor(-(amount as i32), 0),
+                                ansi::AnsiEscapeCSI::CursorNextLine(_) => todo!(),
+                                ansi::AnsiEscapeCSI::CursorPreviousLine(_) => todo!(),
+                                ansi::AnsiEscapeCSI::CursorHorizontalAbsolute(_) => todo!(),
+                                ansi::AnsiEscapeCSI::CursorPosition { .. } => todo!(),
+                                ansi::AnsiEscapeCSI::EraseInDisplay(_) => todo!(),
+                                ansi::AnsiEscapeCSI::EraseInLine(_) => todo!(),
+                                ansi::AnsiEscapeCSI::ScrollUp(_) => todo!(),
+                                ansi::AnsiEscapeCSI::ScrollDown(_) => todo!(),
+                                ansi::AnsiEscapeCSI::HorizontalVerticalPosition { .. } => todo!(),
+                                ansi::AnsiEscapeCSI::SelectGraphicRendition(sgr) => {
+                                    if let Some(color) = sgr.background_color {
+                                        self.console.text_style.background = color.color();
+                                    }
+
+                                    if let Some(color) = sgr.foreground_color {
+                                        self.console.text_style.foreground = color.color();
+                                    }
+                                }
+                                ansi::AnsiEscapeCSI::SaveCurrentCursorPosition => todo!(),
+                                ansi::AnsiEscapeCSI::RestoreSavedCursorPosition => todo!(),
+                            },
+                            ansi::AnsiEscape::StringTerminator => todo!(),
+                            ansi::AnsiEscape::OperatingSystemCommand => todo!(),
+                            ansi::AnsiEscape::StartOfString => todo!(),
+                            ansi::AnsiEscape::PrivacyMessage => todo!(),
+                            ansi::AnsiEscape::ApplicationProgramCommand => todo!(),
+                        }
+                    }
+
+                    continue;
+                } else {
+                    // crate::serial_println!("Invalid ANSI. Skipping Output.");
+                    break;
+                }
+            }
+
+            let _ = chars.next();
 
             if char == '\n' {
                 match self.console.log_type {
@@ -85,89 +140,6 @@ impl FrameBufferWriter {
             // Backspace
             if char == '\x08' {
                 self.console.handle_backspace(self.buffer);
-
-                continue;
-            }
-
-
-            // Escape Sequences
-            if char == '\x1B' {
-                #[allow(clippy::single_match)]
-                match chars.next() {
-                    Some('[') => {
-                        // TODO: Remove alloc?
-                        let mut items = Vec::new();
-
-                        for item in &mut chars {
-                            items.push(item);
-
-                            if ('a'..='z').contains(&item) || ('A'..='Z').contains(&item) {
-                                break;
-                            }
-                        }
-
-                        let end_letter = items.pop();
-
-                        items.reverse();
-
-                        match end_letter {
-                            // Foreground / Background - \x1B[30m
-                            Some('m') if items.len() == 2 => {
-                                // TODO: Handle 0 - 107 (items.len() 1, 2, and 3)
-                                let mode = items.pop().unwrap();
-                                let color = items.pop().unwrap();
-
-                                self.console.cached_lines.back_mut().unwrap().push(CacheType::Ansi(vec!['\x1B', '[', mode, color, 'm']));
-
-                                if mode != '3' && mode != '4' { continue }
-
-                                let color_index = color as u8 - b'0';
-                                let color = ColorName::from_u8(color_index).color();
-
-                                match mode {
-                                    '3' => self.console.text_style.foreground = color,
-                                    '4' => self.console.text_style.background = color,
-
-                                    _ => ()
-                                }
-                            }
-
-                            // Cursor Up
-                            Some('A') if !items.is_empty() => {
-                                // TODO
-                            }
-
-                            // Cursor Down
-                            Some('B') if !items.is_empty() => {
-                                // TODO
-                            }
-
-                            // Cursor Forward
-                            Some('C') if !items.is_empty() => {
-                                let amount = items.into_iter().fold(
-                                    0,
-                                    |a, c| a * 10 + c.to_digit(10).unwrap()
-                                ) as i32;
-
-                                self.console.move_cursor(amount, 0);
-                            }
-
-                            // Cursor Back
-                            Some('D') if !items.is_empty() => {
-                                let amount = items.into_iter().fold(
-                                    0,
-                                    |a, c| a * 10 + c.to_digit(10).unwrap()
-                                ) as i32;
-
-                                self.console.move_cursor(-amount, 0);
-                            }
-
-                            _ => ()
-                        }
-                    }
-
-                    _ => ()
-                }
 
                 continue;
             }

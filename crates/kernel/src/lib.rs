@@ -12,6 +12,7 @@ extern crate alloc;
 #[macro_use] extern crate gbl;
 
 use bootloader_api::BootInfo;
+use gbl::io::ColorName;
 use spin::{Once, Mutex, MutexGuard};
 use x86_64::VirtAddr;
 
@@ -50,8 +51,8 @@ pub static PHYSICAL_MEM_OFFSET: Once<u64> = Once::new();
 pub fn init(boot_info: &'static mut BootInfo) {
     PHYSICAL_MEM_OFFSET.call_once(|| *boot_info.physical_memory_offset.as_ref().unwrap());
 
-    let green = color::ColorName::Green.ansi();
-    let clear = color::ColorName::Foreground.ansi();
+    let green = ColorName::Green.ansi();
+    let clear = ColorName::DefaultForeground.ansi();
 
     // Heap
     print!("INIT: Heap.......... ");

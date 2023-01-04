@@ -5,6 +5,7 @@ extern crate alloc;
 use core::ops::{SubAssign, AddAssign};
 
 pub mod user;
+pub mod iter;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Dimensions<V>(V, V);

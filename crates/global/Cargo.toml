@@ -3,6 +3,9 @@ name = "gbl"
 version = "0.1.0"
 edition = "2021"
 
+[dependencies]
+common = { path = "../common" }
+
 [dependencies.lazy_static]
 version = "1.4.0"
 features = [ "spin_no_std" ]
